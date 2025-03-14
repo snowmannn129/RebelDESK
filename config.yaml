@@ -1,0 +1,114 @@
+# RebelDESK Configuration File
+
+# Application Settings
+application:
+  name: RebelDESK
+  version: 0.1.0
+  log_level: DEBUG  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# UI Settings
+ui:
+  theme: dark  # dark, light, system
+  font:
+    family: "Consolas, 'Courier New', monospace"
+    size: 12
+  editor:
+    tab_size: 4
+    use_spaces: true
+    auto_indent: true
+    line_numbers: true
+    highlight_current_line: true
+    word_wrap: false
+    show_whitespace: false
+  window:
+    remember_size: true
+    default_width: 1200
+    default_height: 800
+    start_maximized: false
+
+# Editor Settings
+editor:
+  auto_save: true
+  auto_save_interval: 60  # seconds
+  backup_files: true
+  max_recent_files: 10
+  default_language: python  # python, javascript, cpp, etc.
+
+# Syntax Highlighting
+syntax:
+  enable: true
+  theme: monokai  # monokai, github, solarized, etc.
+  languages:
+    - python
+    - javascript
+    - html
+    - css
+    - cpp
+    - java
+    - markdown
+    - yaml
+    - json
+
+# AI Code Assistance
+ai:
+  enable: true
+  suggestion_delay: 300  # milliseconds
+  max_suggestions: 5
+  context_lines: 10  # lines of context to consider
+  model:
+    type: local  # local, api
+    local_path: ""  # path to local model
+    api_endpoint: ""  # API endpoint for remote model
+    api_key_env: "REBELDESK_AI_API_KEY"  # environment variable for API key
+
+# File Types
+file_types:
+  associations:
+    - extension: [".py"]
+      language: python
+    - extension: [".js", ".jsx"]
+      language: javascript
+    - extension: [".html", ".htm"]
+      language: html
+    - extension: [".css"]
+      language: css
+    - extension: [".cpp", ".h", ".hpp"]
+      language: cpp
+    - extension: [".java"]
+      language: java
+    - extension: [".md"]
+      language: markdown
+    - extension: [".yaml", ".yml"]
+      language: yaml
+    - extension: [".json"]
+      language: json
+
+# Keyboard Shortcuts
+shortcuts:
+  save: "Ctrl+S"
+  save_as: "Ctrl+Shift+S"
+  open: "Ctrl+O"
+  new_file: "Ctrl+N"
+  close_file: "Ctrl+W"
+  undo: "Ctrl+Z"
+  redo: "Ctrl+Y"
+  cut: "Ctrl+X"
+  copy: "Ctrl+C"
+  paste: "Ctrl+V"
+  find: "Ctrl+F"
+  replace: "Ctrl+H"
+  comment: "Ctrl+/"
+  indent: "Tab"
+  unindent: "Shift+Tab"
+  run_code: "F5"
+  toggle_terminal: "Ctrl+`"
+
+# Plugins
+plugins:
+  enabled: []
+  disabled: []
+  auto_update: true
+  plugin_directory: "plugins"
+
+# Recent Files
+recent_files: []
