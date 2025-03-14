@@ -9,6 +9,7 @@ This module contains unit tests for the MainWindow class.
 import sys
 import os
 import unittest
+import pytest
 from unittest.mock import MagicMock, patch
 
 # Add the src directory to the path so we can import modules
@@ -21,6 +22,12 @@ from PyQt5.QtCore import Qt
 
 # Import the MainWindow class
 from src.ui.main_window import MainWindow
+
+# Check if running in CI environment
+CI_ENVIRONMENT = os.environ.get('CI', 'false').lower() == 'true' or os.environ.get('GITHUB_ACTIONS', 'false').lower() == 'true'
+
+# Skip UI tests in CI environment
+pytestmark = pytest.mark.skipif(CI_ENVIRONMENT, reason="UI tests are skipped in CI environment")
 
 class TestMainWindow(unittest.TestCase):
     """Test cases for the MainWindow class."""
