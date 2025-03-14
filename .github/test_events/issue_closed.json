@@ -1,0 +1,25 @@
+{
+  "action": "closed",
+  "issue": {
+    "number": 1,
+    "title": "Implement dark/light themes",
+    "body": "Task from src/ui/progress_ui.md\nSection: Core UI Framework",
+    "labels": [
+      {
+        "name": "ui"
+      },
+      {
+        "name": "feature"
+      }
+    ]
+  },
+  "repository": {
+    "name": "RebelDESK",
+    "full_name": "yourusername/RebelDESK",
+    "private": false,
+    "owner": {
+      "name": "yourusername",
+      "email": "your.email@example.com"
+    }
+  }
+}

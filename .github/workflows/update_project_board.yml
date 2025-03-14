@@ -1,0 +1,51 @@
+name: Update Project Board
+
+on:
+  issues:
+    types: [opened, labeled, unlabeled, assigned, unassigned]
+  pull_request:
+    types: [opened, labeled, unlabeled, assigned, unassigned]
+
+jobs:
+  update_project_board:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move to To-Do
+        if: github.event.action == 'opened'
+        uses: alex-page/github-project-automation-plus@v0.8.1
+        with:
+          project: RebelDESK Development
+          column: To-Do
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move to In Progress
+        if: contains(github.event.issue.labels.*.name, 'in-progress') || contains(github.event.pull_request.labels.*.name, 'in-progress')
+        uses: alex-page/github-project-automation-plus@v0.8.1
+        with:
+          project: RebelDESK Development
+          column: In Progress
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move to In Review
+        if: contains(github.event.issue.labels.*.name, 'review') || contains(github.event.pull_request.labels.*.name, 'review')
+        uses: alex-page/github-project-automation-plus@v0.8.1
+        with:
+          project: RebelDESK Development
+          column: In Review
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move to Testing
+        if: contains(github.event.issue.labels.*.name, 'testing') || contains(github.event.pull_request.labels.*.name, 'testing')
+        uses: alex-page/github-project-automation-plus@v0.8.1
+        with:
+          project: RebelDESK Development
+          column: Testing
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move to Completed
+        if: github.event.action == 'closed'
+        uses: alex-page/github-project-automation-plus@v0.8.1
+        with:
+          project: RebelDESK Development
+          column: Completed
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

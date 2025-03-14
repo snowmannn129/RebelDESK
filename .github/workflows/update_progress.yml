@@ -1,0 +1,23 @@
+name: Update Progress Checklist
+
+on:
+  issues:
+    types: [closed]
+
+jobs:
+  update-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        
+      - name: Update progress.md
+        run: |
+          sed -i 's/- \[ \] ${{ github.event.issue.title }}/- [x] ${{ github.event.issue.title }}/' progress.md
+          
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git commit -am "Updated progress.md for completed issue #${{ github.event.issue.number }}"
+          git push

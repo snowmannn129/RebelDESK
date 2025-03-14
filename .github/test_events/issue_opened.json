@@ -1,0 +1,25 @@
+{
+  "action": "opened",
+  "issue": {
+    "number": 2,
+    "title": "Add syntax highlighting",
+    "body": "Task from src/ui/editor/progress_editor.md\nSection: Code Editing Features",
+    "labels": [
+      {
+        "name": "editor"
+      },
+      {
+        "name": "feature"
+      }
+    ]
+  },
+  "repository": {
+    "name": "RebelDESK",
+    "full_name": "yourusername/RebelDESK",
+    "private": false,
+    "owner": {
+      "name": "yourusername",
+      "email": "your.email@example.com"
+    }
+  }
+}
