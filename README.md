@@ -43,7 +43,7 @@ RebelDESK/
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/RebelDESK.git
+   git clone https://github.com/snowmannn129/RebelDESK.git
    cd RebelDESK
    ```
 
@@ -87,6 +87,10 @@ RebelDESK uses GitHub Actions for automated workflow management:
 - **Automated Testing**: Tests run automatically on push and pull requests
 - **Progress Tracking**: Checklist items in progress.md are updated when issues are closed
 - **Project Board Management**: Issues move through workflow stages automatically
+
+The project is hosted on GitHub at: [https://github.com/snowmannn129/RebelDESK](https://github.com/snowmannn129/RebelDESK)
+
+The GitHub project board can be found at: [https://github.com/users/snowmannn129/projects/1](https://github.com/users/snowmannn129/projects/1)
 
 For detailed setup instructions, see [GitHub Workflow Guide](docs/github_workflow_guide.md).
 

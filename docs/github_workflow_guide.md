@@ -5,8 +5,8 @@ This guide explains how to set up and use the GitHub workflow automation for the
 ## Prerequisites
 
 1. **GitHub CLI**: Install the GitHub CLI from [https://cli.github.com/](https://cli.github.com/)
-2. **GitHub Repository**: Ensure your RebelDESK repository is created on GitHub
-3. **GitHub Project Board**: Set up a project board named "RebelDESK Development" with columns: To-Do, In Progress, In Review, Testing, Completed
+2. **GitHub Repository**: The RebelDESK repository is available at [https://github.com/snowmannn129/RebelDESK](https://github.com/snowmannn129/RebelDESK)
+3. **GitHub Project Board**: The project board is available at [https://github.com/users/snowmannn129/projects/1](https://github.com/users/snowmannn129/projects/1)
 
 ## Setup Steps
 
@@ -15,7 +15,7 @@ This guide explains how to set up and use the GitHub workflow automation for the
 If you haven't already, clone the repository to your local machine:
 
 ```powershell
-git clone https://github.com/yourusername/RebelDESK.git
+git clone https://github.com/snowmannn129/RebelDESK.git
 cd RebelDESK
 ```
 
