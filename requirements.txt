@@ -1,9 +1,10 @@
 # Core dependencies
-PyQt5>=5.15.0
-PyQt5-sip>=12.8.0
+PyQt5>=5.15.11
+PyQt5-sip>=12.17.0
+PyQt5-Qt5>=5.15.2
 
 # Syntax highlighting
-Pygments>=2.10.0
+Pygments>=2.19.1
 
 # Testing
 pytest>=6.2.5

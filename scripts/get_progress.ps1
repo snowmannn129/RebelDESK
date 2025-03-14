@@ -56,4 +56,3 @@ Get-Progress | Out-File -FilePath $reportPath -Encoding utf8
 Write-Output "Progress report generated at: $reportPath"
 
 # Display progress in console
-Get-Progress

@@ -87,6 +87,15 @@ RebelDESK uses GitHub Actions for automated workflow management:
 - **Automated Testing**: Tests run automatically on push and pull requests
 - **Progress Tracking**: Checklist items in progress.md are updated when issues are closed
 - **Project Board Management**: Issues move through workflow stages automatically
+- **Issue Status Updates**: Scripts to synchronize project progress with GitHub issues
+
+#### GitHub Scripts
+
+The project includes several scripts to manage GitHub integration:
+
+- **create_github_issues.ps1**: Generates GitHub issues from progress tracking files
+- **update_github_issue_status.ps1**: Updates issue status based on project progress
+- **setup_github_labels.ps1**: Sets up standardized labels for the repository
 
 The project is hosted on GitHub at: [https://github.com/snowmannn129/RebelDESK](https://github.com/snowmannn129/RebelDESK)
 
@@ -99,6 +108,23 @@ For detailed setup instructions, see [GitHub Workflow Guide](docs/github_workflo
 ```
 pytest src/tests/
 ```
+
+### Updating GitHub Issue Status
+
+To update GitHub issues based on project progress:
+
+```
+# Generate GitHub issue status update commands
+powershell -File scripts/update_github_issue_status.ps1
+
+# Execute the generated commands (requires GitHub CLI)
+# The commands will be in reports/github_issue_status_update_YYYYMMDD.md
+```
+
+This will:
+1. Close issues for completed tasks
+2. Add the "in-progress" label to tasks that are in progress
+3. The project board will automatically update based on these changes
 
 ### Development Workflow
 

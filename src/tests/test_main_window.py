@@ -96,6 +96,7 @@ class TestMainWindow(unittest.TestCase):
         self.assertIsNotNone(self.window.file_menu)
         self.assertIsNotNone(self.window.edit_menu)
         self.assertIsNotNone(self.window.view_menu)
+        self.assertIsNotNone(self.window.settings_menu)
         self.assertIsNotNone(self.window.run_menu)
         self.assertIsNotNone(self.window.help_menu)
         
@@ -126,6 +127,9 @@ class TestMainWindow(unittest.TestCase):
         
         # Check view actions
         self.assertIsNotNone(self.window.toggle_terminal_action)
+        
+        # Check settings actions
+        self.assertIsNotNone(self.window.settings_action)
         
         # Check run actions
         self.assertIsNotNone(self.window.run_action)
@@ -175,6 +179,50 @@ class TestMainWindow(unittest.TestCase):
         with patch.object(self.window, 'close') as mock_close:
             self.window.exit_action.trigger()
             mock_close.assert_called_once()
+    
+    @patch('src.ui.main_window.SettingsPanel')
+    def test_settings_action(self, mock_settings_panel):
+        """Test the settings action."""
+        # Mock the settings panel
+        mock_settings_instance = MagicMock()
+        mock_settings_instance.exec_.return_value = True
+        mock_settings_panel.return_value = mock_settings_instance
+        
+        # Mock the config manager
+        mock_config = {'ui': {'theme': 'light'}}
+        self.window.config_manager.load_config = MagicMock(return_value=mock_config)
+        
+        # Trigger the settings action
+        with patch.object(self.window, 'open_settings') as mock_open_settings:
+            self.window.settings_action.trigger()
+            mock_open_settings.assert_called_once()
+    
+    @patch('src.ui.main_window.SettingsPanel')
+    def test_open_settings(self, mock_settings_panel):
+        """Test the open_settings method."""
+        # Mock the settings panel
+        mock_settings_instance = MagicMock()
+        mock_settings_instance.exec_.return_value = True
+        mock_settings_panel.return_value = mock_settings_instance
+        
+        # Mock the config manager
+        mock_config = {'ui': {'theme': 'light'}}
+        self.window.config_manager.load_config = MagicMock(return_value=mock_config)
+        
+        # Call the open_settings method
+        self.window.open_settings()
+        
+        # Check that the settings panel was created with the correct arguments
+        mock_settings_panel.assert_called_once_with(self.window, self.window.config_manager)
+        
+        # Check that exec_ was called on the settings panel
+        mock_settings_instance.exec_.assert_called_once()
+        
+        # Check that load_config was called on the config manager
+        self.window.config_manager.load_config.assert_called_once()
+        
+        # Check that the config was updated
+        self.assertEqual(self.window.config, mock_config)
 
 if __name__ == "__main__":
     unittest.main()

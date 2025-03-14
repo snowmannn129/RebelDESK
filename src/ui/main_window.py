@@ -15,13 +15,14 @@ from PyQt5.QtWidgets import (
     QMessageBox, QVBoxLayout, QHBoxLayout, QWidget,
     QSplitter, QToolBar, QStatusBar, QMenuBar, QMenu
 )
+from src.ui.settings.settings_panel import SettingsPanel
 from PyQt5.QtCore import Qt, QSize, QSettings, QTimer
 from PyQt5.QtGui import QIcon, QKeySequence
 
-# Import will be implemented in future steps
-# from src.ui.editor import CodeEditor
+from src.ui.editor import CodeEditor
 # from src.ui.terminal import Terminal
-# from src.backend.file_manager import FileManager
+from src.backend.file_manager import FileManager
+from src.utils.config_manager import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,11 @@ class MainWindow(QMainWindow):
         self.current_file = None
         self.unsaved_changes = False
         
-        # Will be implemented in future steps
-        # self.file_manager = FileManager(self.config)
+        # Configuration manager
+        self.config_manager = ConfigManager()
+        
+        # Initialize file manager
+        self.file_manager = FileManager(self.config)
         
         self._setup_ui()
         self._create_actions()
@@ -155,6 +159,11 @@ class MainWindow(QMainWindow):
         self.toggle_terminal_action.setShortcut("Ctrl+`")
         self.toggle_terminal_action.setStatusTip("Show or hide the terminal")
         
+        # Settings actions
+        self.settings_action = QAction("Settings", self)
+        self.settings_action.setShortcut("Ctrl+,")
+        self.settings_action.setStatusTip("Open settings panel")
+        
         # Run actions
         self.run_action = QAction("Run", self)
         self.run_action.setShortcut("F5")
@@ -190,6 +199,10 @@ class MainWindow(QMainWindow):
         # View menu
         self.view_menu = self.menuBar().addMenu("&View")
         self.view_menu.addAction(self.toggle_terminal_action)
+        
+        # Settings menu
+        self.settings_menu = self.menuBar().addMenu("&Settings")
+        self.settings_menu.addAction(self.settings_action)
         
         # Run menu
         self.run_menu = self.menuBar().addMenu("&Run")
@@ -252,6 +265,9 @@ class MainWindow(QMainWindow):
         # Tab close button
         self.editor_tabs.tabCloseRequested.connect(self.close_tab)
         
+        # Settings action
+        self.settings_action.triggered.connect(self.open_settings)
+        
     def _load_settings(self):
         """Load application settings."""
         # Will be implemented in future steps
@@ -264,23 +280,123 @@ class MainWindow(QMainWindow):
         
     def new_file(self):
         """Create a new file."""
-        # Will be implemented in future steps
-        logger.info("New file action triggered")
+        # Create a new editor
+        editor = CodeEditor(self, self.config)
+        
+        # Add the editor to the tab widget
+        self.editor_tabs.addTab(editor, "Untitled")
+        
+        # Set the current tab to the new editor
+        self.editor_tabs.setCurrentWidget(editor)
+        
+        logger.info("New file created")
         
     def open_file(self):
         """Open an existing file."""
-        # Will be implemented in future steps
-        logger.info("Open file action triggered")
+        # Show file dialog
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open File",
+            "",
+            "All Files (*);;Python Files (*.py);;Text Files (*.txt)"
+        )
+        
+        if file_path:
+            # Check if the file is already open
+            for i in range(self.editor_tabs.count()):
+                editor = self.editor_tabs.widget(i)
+                if editor.current_file == file_path:
+                    # File is already open, switch to its tab
+                    self.editor_tabs.setCurrentIndex(i)
+                    return
+            
+            # Create a new editor
+            editor = CodeEditor(self, self.config)
+            
+            # Load the file
+            if editor.load_file(file_path):
+                # Add the editor to the tab widget
+                file_name = os.path.basename(file_path)
+                self.editor_tabs.addTab(editor, file_name)
+                
+                # Set the current tab to the new editor
+                self.editor_tabs.setCurrentWidget(editor)
+                
+                # Add to recent files
+                self.file_manager.add_recent_file(file_path)
+                
+                logger.info(f"Opened file: {file_path}")
+            else:
+                # Failed to load file
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to open file: {file_path}"
+                )
         
     def save_file(self):
         """Save the current file."""
-        # Will be implemented in future steps
-        logger.info("Save file action triggered")
+        # Get the current editor
+        editor = self.editor_tabs.currentWidget()
+        if not editor:
+            return
+            
+        # If the file has no path, use save as
+        if not editor.current_file:
+            self.save_file_as()
+            return
+            
+        # Save the file
+        if editor.save_file():
+            # Update the tab title
+            file_name = os.path.basename(editor.current_file)
+            self.editor_tabs.setTabText(self.editor_tabs.currentIndex(), file_name)
+            
+            # Update status bar
+            self.statusbar.showMessage(f"Saved: {editor.current_file}", 3000)
+            
+            logger.info(f"Saved file: {editor.current_file}")
+        else:
+            # Failed to save file
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to save file: {editor.current_file}"
+            )
         
     def save_file_as(self):
         """Save the current file with a new name."""
-        # Will be implemented in future steps
-        logger.info("Save file as action triggered")
+        # Get the current editor
+        editor = self.editor_tabs.currentWidget()
+        if not editor:
+            return
+            
+        # Show file dialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save File As",
+            "",
+            "All Files (*);;Python Files (*.py);;Text Files (*.txt)"
+        )
+        
+        if file_path:
+            # Save the file
+            if editor.save_file(file_path):
+                # Update the tab title
+                file_name = os.path.basename(file_path)
+                self.editor_tabs.setTabText(self.editor_tabs.currentIndex(), file_name)
+                
+                # Update status bar
+                self.statusbar.showMessage(f"Saved: {file_path}", 3000)
+                
+                logger.info(f"Saved file as: {file_path}")
+            else:
+                # Failed to save file
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to save file as: {file_path}"
+                )
         
     def close_tab(self, index):
         """
@@ -289,14 +405,69 @@ class MainWindow(QMainWindow):
         Args:
             index (int): Index of the tab to close.
         """
-        # Will be implemented in future steps
-        logger.info(f"Close tab action triggered for tab {index}")
+        # Get the editor at the given index
+        editor = self.editor_tabs.widget(index)
+        if not editor:
+            return
+            
+        # Check for unsaved changes
+        if editor.has_unsaved_changes():
+            # Ask the user if they want to save
+            response = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                f"The file has unsaved changes. Do you want to save before closing?",
+                QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                QMessageBox.Save
+            )
+            
+            if response == QMessageBox.Save:
+                # Save the file
+                if not editor.current_file:
+                    # File has no path, use save as
+                    self.editor_tabs.setCurrentIndex(index)
+                    if not self.save_file_as():
+                        # User cancelled save as
+                        return
+                else:
+                    # Save the file
+                    if not editor.save_file():
+                        # Failed to save
+                        QMessageBox.critical(
+                            self,
+                            "Error",
+                            f"Failed to save file: {editor.current_file}"
+                        )
+                        return
+            elif response == QMessageBox.Cancel:
+                # User cancelled
+                return
+        
+        # Remove the tab
+        self.editor_tabs.removeTab(index)
+        
+        logger.info(f"Closed tab {index}")
         
     def close_current_tab(self):
         """Close the current tab."""
         current_index = self.editor_tabs.currentIndex()
         if current_index >= 0:
             self.close_tab(current_index)
+            
+    def open_settings(self):
+        """Open the settings panel."""
+        settings_panel = SettingsPanel(self, self.config_manager)
+        if settings_panel.exec_():
+            # Settings were accepted, reload configuration
+            self.config = self.config_manager.load_config()
+            
+            # Update UI with new settings
+            # This would be expanded in future steps to update all UI components
+            
+            # Update status bar
+            self.statusbar.showMessage("Settings updated", 3000)
+            
+            logger.info("Settings updated")
             
     def closeEvent(self, event):
         """
@@ -306,7 +477,48 @@ class MainWindow(QMainWindow):
             event (QCloseEvent): The close event.
         """
         # Check for unsaved changes
-        # Will be implemented in future steps
+        for i in range(self.editor_tabs.count()):
+            editor = self.editor_tabs.widget(i)
+            if editor.has_unsaved_changes():
+                # Ask the user if they want to save
+                response = QMessageBox.question(
+                    self,
+                    "Unsaved Changes",
+                    f"There are unsaved changes. Do you want to save before closing?",
+                    QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
+                    QMessageBox.Save
+                )
+                
+                if response == QMessageBox.Save:
+                    # Save all unsaved files
+                    for j in range(self.editor_tabs.count()):
+                        editor = self.editor_tabs.widget(j)
+                        if editor.has_unsaved_changes():
+                            self.editor_tabs.setCurrentIndex(j)
+                            if not editor.current_file:
+                                # File has no path, use save as
+                                if not self.save_file_as():
+                                    # User cancelled save as
+                                    event.ignore()
+                                    return
+                            else:
+                                # Save the file
+                                if not editor.save_file():
+                                    # Failed to save
+                                    QMessageBox.critical(
+                                        self,
+                                        "Error",
+                                        f"Failed to save file: {editor.current_file}"
+                                    )
+                                    event.ignore()
+                                    return
+                elif response == QMessageBox.Cancel:
+                    # User cancelled
+                    event.ignore()
+                    return
+                
+                # Only need to ask once
+                break
         
         # Save settings
         self._save_settings()
