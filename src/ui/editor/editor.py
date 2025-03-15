@@ -13,8 +13,10 @@ from pathlib import Path
 
 from PyQt5.QtWidgets import (
     QPlainTextEdit, QWidget, QTextEdit, QVBoxLayout, 
-    QApplication, QFileDialog, QMessageBox
+    QApplication, QFileDialog, QMessageBox, QScrollBar
 )
+from src.ai.code_completion import CodeCompletionManager
+from src.ui.editor.completion_widget import CompletionWidget
 from PyQt5.QtGui import (
     QColor, QTextFormat, QPainter, QTextCharFormat, 
     QFont, QTextCursor, QSyntaxHighlighter, QFontMetrics
@@ -217,8 +219,14 @@ class CodeEditor(QPlainTextEdit):
         self.line_number_area = LineNumberArea(self)
         self.unsaved_changes = False
         
+        # Initialize code completion
+        self.completion_manager = CodeCompletionManager(self.config)
+        
         self._setup_editor()
         self._connect_signals()
+        
+        # Initialize completion widget after editor setup
+        self.completion_widget = CompletionWidget(self, self.completion_manager)
         
     def _setup_editor(self):
         """Set up the editor appearance and behavior."""
@@ -266,6 +274,10 @@ class CodeEditor(QPlainTextEdit):
         self.updateRequest.connect(self.updateLineNumberArea)
         self.cursorPositionChanged.connect(self.highlightCurrentLine)
         self.textChanged.connect(self.onTextChanged)
+        
+        # Connect completion widget signals
+        if hasattr(self, 'completion_widget'):
+            self.completion_widget.completion_selected.connect(self.on_completion_selected)
         
     def onTextChanged(self):
         """Handle text changed event."""
@@ -337,7 +349,17 @@ class CodeEditor(QPlainTextEdit):
             event (QPaintEvent): The paint event.
         """
         painter = QPainter(self.line_number_area)
-        painter.fillRect(event.rect(), QColor("#2d2d2d"))  # Dark background for line numbers
+        
+        # Use theme-specific colors
+        theme = self.config.get('ui', {}).get('theme', 'dark')
+        if theme == 'dark':
+            bg_color = QColor("#2d2d2d")  # Dark background
+            text_color = QColor("#8f908a")  # Light gray text
+        else:
+            bg_color = QColor("#e0e0e0")  # Light background
+            text_color = QColor("#505050")  # Dark gray text
+            
+        painter.fillRect(event.rect(), bg_color)
         
         block = self.firstVisibleBlock()
         block_number = block.blockNumber()
@@ -347,7 +369,7 @@ class CodeEditor(QPlainTextEdit):
         while block.isValid() and top <= event.rect().bottom():
             if block.isVisible() and bottom >= event.rect().top():
                 number = str(block_number + 1)
-                painter.setPen(QColor("#8f908a"))  # Light gray for line numbers
+                painter.setPen(text_color)
                 painter.drawText(QRect(0, int(top), self.line_number_area.width(), self.fontMetrics().height()),
                                 Qt.AlignRight, number)
                                 
@@ -366,7 +388,13 @@ class CodeEditor(QPlainTextEdit):
         if not self.isReadOnly():
             selection = QTextEdit.ExtraSelection()
             
-            line_color = QColor("#3e3d32")  # Slightly lighter than background for current line
+            # Use theme-specific colors
+            theme = self.config.get('ui', {}).get('theme', 'dark')
+            if theme == 'dark':
+                line_color = QColor("#3e3d32")  # Slightly lighter than dark background
+            else:
+                line_color = QColor("#e8e8e8")  # Slightly darker than light background
+                
             selection.format.setBackground(line_color)
             selection.format.setProperty(QTextFormat.FullWidthSelection, True)
             selection.cursor = self.textCursor()
@@ -382,6 +410,14 @@ class CodeEditor(QPlainTextEdit):
         Args:
             event (QKeyEvent): The key event.
         """
+        # Handle completion widget key events if it's visible
+        if hasattr(self, 'completion_widget') and self.completion_widget.isVisible():
+            # Let the completion widget handle navigation keys
+            if event.key() in [Qt.Key_Down, Qt.Key_Up, Qt.Key_Return, Qt.Key_Enter, Qt.Key_Escape, Qt.Key_Tab]:
+                self.completion_widget.keyPressEvent(event)
+                if event.isAccepted():
+                    return
+        
         # Handle auto-indentation
         if self.auto_indent and event.key() == Qt.Key_Return:
             cursor = self.textCursor()
@@ -541,6 +577,73 @@ class CodeEditor(QPlainTextEdit):
             logger.error(f"Error saving file {save_path}: {e}", exc_info=True)
             return False
             
+    def on_completion_selected(self, completion):
+        """
+        Handle completion selection.
+        
+        Args:
+            completion (dict): The selected completion.
+        """
+        # Log the selected completion
+        logger.debug(f"Completion selected: {completion.get('text')} ({completion.get('provider')})")
+    
+    def set_theme(self, theme):
+        """
+        Set the theme for the editor.
+        
+        Args:
+            theme (str): The theme to apply ('dark' or 'light').
+        """
+        # Update the syntax highlighting style based on the theme
+        syntax_theme = self.config.get('syntax', {}).get('theme', 'monokai')
+        if self.highlighter:
+            self.highlighter.set_style(syntax_theme)
+        
+        # Apply theme-specific colors
+        if theme == 'dark':
+            # Set dark theme colors
+            self.setStyleSheet("""
+                QPlainTextEdit {
+                    background-color: #1e1e1e;
+                    color: #f0f0f0;
+                    border: none;
+                }
+            """)
+            
+            # Update line number area colors
+            self.line_number_area.setStyleSheet("""
+                background-color: #2d2d2d;
+                color: #8f908a;
+            """)
+            
+            # Update current line highlight color
+            if self.highlight_current_line:
+                self.highlightCurrentLine()
+        else:
+            # Set light theme colors
+            self.setStyleSheet("""
+                QPlainTextEdit {
+                    background-color: #f5f5f5;
+                    color: #000000;
+                    border: none;
+                }
+            """)
+            
+            # Update line number area colors
+            self.line_number_area.setStyleSheet("""
+                background-color: #e0e0e0;
+                color: #505050;
+            """)
+            
+            # Update current line highlight color
+            if self.highlight_current_line:
+                self.highlightCurrentLine()
+        
+        # Update the config
+        self.config['ui']['theme'] = theme
+        
+        logger.info(f"Applied {theme} theme to editor")
+    
     def has_unsaved_changes(self):
         """
         Check if the editor has unsaved changes.

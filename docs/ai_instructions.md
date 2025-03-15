@@ -20,13 +20,13 @@ After completing any task or feature:
 
 2. **Update GitHub Issues and Project Board**:
    - Run `powershell -File scripts/update_github_issue_status.ps1` to generate GitHub issue update commands
-   - Execute the generated commands to update GitHub issues status
+   - Execute the generated commands to update GitHub issues status (GitHub CLI is installed and configured)
    - Ensure completed tasks are closed and in-progress tasks are properly labeled
    - The project board will automatically update based on issue status and labels
 
 3. **Create New GitHub Issues for Pending Tasks**:
    - Run `powershell -File scripts/create_github_issues.ps1` to generate GitHub issue creation commands for new tasks
-   - Execute the generated commands to create new GitHub issues
+   - Execute the generated commands to create new GitHub issues (GitHub CLI is installed and configured)
 
 ## Development Guidelines
 

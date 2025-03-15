@@ -17,10 +17,10 @@ from PyQt5.QtWidgets import (
 )
 from src.ui.settings.settings_panel import SettingsPanel
 from PyQt5.QtCore import Qt, QSize, QSettings, QTimer
-from PyQt5.QtGui import QIcon, QKeySequence
+from PyQt5.QtGui import QIcon, QKeySequence, QFont
 
 from src.ui.editor import CodeEditor
-# from src.ui.terminal import Terminal
+from src.backend.terminal import Terminal
 from src.backend.file_manager import FileManager
 from src.utils.config_manager import ConfigManager
 
@@ -78,9 +78,9 @@ class MainWindow(QMainWindow):
         self.editor_tabs.setMovable(True)
         self.main_splitter.addWidget(self.editor_tabs)
         
-        # Terminal area (will be implemented in future steps)
-        # self.terminal = Terminal()
-        # self.main_splitter.addWidget(self.terminal)
+        # Terminal area
+        self.terminal = Terminal(self, self.config)
+        self.main_splitter.addWidget(self.terminal)
         
         # Set initial splitter sizes
         self.main_splitter.setSizes([700, 300])
@@ -268,15 +268,127 @@ class MainWindow(QMainWindow):
         # Settings action
         self.settings_action.triggered.connect(self.open_settings)
         
+        # View actions
+        self.toggle_terminal_action.triggered.connect(self.toggle_terminal)
+        
+        # Run actions
+        self.run_action.triggered.connect(self.run_current_file)
+        
     def _load_settings(self):
         """Load application settings."""
-        # Will be implemented in future steps
-        pass
+        # Load theme settings
+        theme = self.config.get('ui', {}).get('theme', 'dark')
+        self._apply_theme(theme)
         
+        # Load other settings as needed
+        
+    def _apply_theme(self, theme):
+        """
+        Apply the selected theme to the application.
+        
+        Args:
+            theme (str): The theme to apply ('dark', 'light', or 'system').
+        """
+        if theme == 'system':
+            # Determine system theme (simplified implementation)
+            # In a real implementation, this would detect the system theme
+            theme = 'dark'  # Default to dark if system theme can't be determined
+        
+        # Apply theme to main window
+        if theme == 'dark':
+            self.setStyleSheet("""
+                QMainWindow, QWidget {
+                    background-color: #1e1e1e;
+                    color: #f0f0f0;
+                }
+                QMenuBar, QMenu {
+                    background-color: #2d2d2d;
+                    color: #f0f0f0;
+                }
+                QMenuBar::item:selected, QMenu::item:selected {
+                    background-color: #3e3d32;
+                }
+                QToolBar {
+                    background-color: #2d2d2d;
+                    border: none;
+                }
+                QStatusBar {
+                    background-color: #2d2d2d;
+                    color: #f0f0f0;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #3c3c3c;
+                }
+                QTabBar::tab {
+                    background-color: #2d2d2d;
+                    color: #f0f0f0;
+                    padding: 5px 10px;
+                    border: 1px solid #3c3c3c;
+                }
+                QTabBar::tab:selected {
+                    background-color: #1e1e1e;
+                }
+                QSplitter::handle {
+                    background-color: #3c3c3c;
+                }
+            """)
+        else:  # light theme
+            self.setStyleSheet("""
+                QMainWindow, QWidget {
+                    background-color: #f5f5f5;
+                    color: #000000;
+                }
+                QMenuBar, QMenu {
+                    background-color: #f0f0f0;
+                    color: #000000;
+                }
+                QMenuBar::item:selected, QMenu::item:selected {
+                    background-color: #e0e0e0;
+                }
+                QToolBar {
+                    background-color: #f0f0f0;
+                    border: none;
+                }
+                QStatusBar {
+                    background-color: #f0f0f0;
+                    color: #000000;
+                }
+                QTabWidget::pane {
+                    border: 1px solid #cccccc;
+                }
+                QTabBar::tab {
+                    background-color: #e0e0e0;
+                    color: #000000;
+                    padding: 5px 10px;
+                    border: 1px solid #cccccc;
+                }
+                QTabBar::tab:selected {
+                    background-color: #f5f5f5;
+                }
+                QSplitter::handle {
+                    background-color: #cccccc;
+                }
+            """)
+        
+        # Update the theme in the config
+        self.config['ui']['theme'] = theme
+        
+        # Update the theme for all open editors
+        for i in range(self.editor_tabs.count()):
+            editor = self.editor_tabs.widget(i)
+            if hasattr(editor, 'set_theme'):
+                editor.set_theme(theme)
+        
+        # Update the theme for the terminal
+        if hasattr(self.terminal, 'set_theme'):
+            self.terminal.set_theme(theme)
+        
+        logger.info(f"Applied {theme} theme")
+    
     def _save_settings(self):
         """Save application settings."""
-        # Will be implemented in future steps
-        pass
+        # Save the current configuration
+        self.config_manager.save_config(self.config)
         
     def new_file(self):
         """Create a new file."""
@@ -459,15 +571,66 @@ class MainWindow(QMainWindow):
         settings_panel = SettingsPanel(self, self.config_manager)
         if settings_panel.exec_():
             # Settings were accepted, reload configuration
+            old_theme = self.config.get('ui', {}).get('theme', 'dark')
             self.config = self.config_manager.load_config()
+            new_theme = self.config.get('ui', {}).get('theme', 'dark')
             
-            # Update UI with new settings
-            # This would be expanded in future steps to update all UI components
+            # Apply theme if it changed
+            if old_theme != new_theme:
+                self._apply_theme(new_theme)
+            
+            # Update other UI settings
+            # Update font settings for editors
+            font_family = self.config.get('ui', {}).get('font', {}).get('family', "Consolas, 'Courier New', monospace")
+            font_size = self.config.get('ui', {}).get('font', {}).get('size', 12)
+            
+            for i in range(self.editor_tabs.count()):
+                editor = self.editor_tabs.widget(i)
+                if editor:
+                    font = QFont(font_family.split(",")[0].strip().strip("'\""))
+                    font.setPointSize(font_size)
+                    editor.setFont(font)
             
             # Update status bar
             self.statusbar.showMessage("Settings updated", 3000)
             
             logger.info("Settings updated")
+            
+    def toggle_terminal(self):
+        """Show or hide the terminal."""
+        if self.terminal.isVisible():
+            self.terminal.hide()
+        else:
+            self.terminal.show()
+            
+    def run_current_file(self):
+        """Run the current file in the terminal."""
+        # Get the current editor
+        editor = self.editor_tabs.currentWidget()
+        if not editor or not editor.current_file:
+            # No file to run
+            self.statusbar.showMessage("No file to run", 3000)
+            return
+            
+        # Save the file first
+        if editor.has_unsaved_changes():
+            if not editor.save_file():
+                # Failed to save
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to save file: {editor.current_file}"
+                )
+                return
+                
+        # Run the file in the terminal
+        self.terminal.show()  # Make sure the terminal is visible
+        session_name = self.terminal.run_file(editor.current_file)
+        
+        if session_name:
+            self.statusbar.showMessage(f"Running: {editor.current_file}", 3000)
+        else:
+            self.statusbar.showMessage(f"Cannot run file: {editor.current_file}", 3000)
             
     def closeEvent(self, event):
         """

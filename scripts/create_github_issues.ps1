@@ -75,7 +75,8 @@ function Format-GithubIssueCommand {
     $description = $issue.Description -replace '"', '\"'
     $labels = $issue.Labels -join ","
     
-    return "gh issue create --title `"$title`" --body `"$description`" --label `"$labels`" --project `"https://github.com/users/snowmannn129/projects/1`""
+    # Remove project parameter entirely
+    return "gh issue create --title `"$title`" --body `"$description`" --label `"$labels`""
 }
 
 # Get all checklist items

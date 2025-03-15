@@ -20,6 +20,7 @@ from src.ai.code_completion import (
     CompletionProvider,
     JediCompletionProvider,
     TransformerCompletionProvider,
+    SnippetCompletionProvider,
     CodeCompletionManager,
     CompletionWidget
 )
@@ -106,7 +107,9 @@ class TestTransformerCompletionProvider(unittest.TestCase):
             'ai': {
                 'model': {
                     'type': 'local',
-                    'local_path': ''
+                    'local_path': '',
+                    'api_endpoint': 'https://api.example.com/completions',
+                    'api_key_env': 'TEST_API_KEY'
                 },
                 'context_lines': 5
             }
@@ -129,6 +132,7 @@ class TestTransformerCompletionProvider(unittest.TestCase):
         self.assertFalse(self.provider.model_loaded)
         self.assertIsNone(self.provider.model)
         self.assertIsNone(self.provider.tokenizer)
+        self.assertEqual(self.provider.model_type, 'local')
         
     def test_is_model_loaded(self):
         """Test is_model_loaded method."""
@@ -145,8 +149,11 @@ class TestTransformerCompletionProvider(unittest.TestCase):
     @patch('torch.no_grad')
     @patch('transformers.AutoTokenizer')
     @patch('transformers.AutoModelForCausalLM')
-    def test_get_completions(self, mock_model_class, mock_tokenizer_class, mock_no_grad):
-        """Test getting completions with a loaded model."""
+    def test_get_local_completions(self, mock_model_class, mock_tokenizer_class, mock_no_grad):
+        """Test getting completions with a loaded local model."""
+        # Set model type to local
+        self.provider.model_type = 'local'
+        
         # Mock model and tokenizer
         mock_model = MagicMock()
         mock_tokenizer = MagicMock()
@@ -179,7 +186,152 @@ class TestTransformerCompletionProvider(unittest.TestCase):
         # Verify
         self.assertEqual(len(completions), 1)
         self.assertEqual(completions[0]['text'], 'test completion')
-        self.assertEqual(completions[0]['provider'], 'transformer')
+        self.assertEqual(completions[0]['provider'], 'transformer-local')
+        
+    @patch('requests.post')
+    def test_get_api_completions(self, mock_post):
+        """Test getting completions with an API-based model."""
+        # Set model type to api
+        self.provider.model_type = 'api'
+        self.provider.model_loaded = True
+        
+        # Mock environment variable
+        with patch.dict(os.environ, {'TEST_API_KEY': 'test_key'}):
+            # Mock API response
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                'choices': [
+                    {'text': 'api completion 1'},
+                    {'text': 'api completion 2'}
+                ]
+            }
+            mock_post.return_value = mock_response
+            
+            # Test
+            completions = self.provider.get_completions("def test():\n    pass\n", 10)
+            
+            # Verify
+            self.assertEqual(len(completions), 2)
+            self.assertEqual(completions[0]['text'], 'api completion 1')
+            self.assertEqual(completions[0]['provider'], 'transformer-api')
+            self.assertEqual(completions[1]['text'], 'api completion 2')
+            self.assertEqual(completions[1]['provider'], 'transformer-api')
+            
+            # Verify API call
+            mock_post.assert_called_once()
+            args, kwargs = mock_post.call_args
+            self.assertEqual(args[0], 'https://api.example.com/completions')
+            self.assertEqual(kwargs['headers']['Authorization'], 'Bearer test_key')
+            
+    @patch('requests.post')
+    def test_get_api_completions_error(self, mock_post):
+        """Test handling API errors."""
+        # Set model type to api
+        self.provider.model_type = 'api'
+        self.provider.model_loaded = True
+        
+        # Mock environment variable
+        with patch.dict(os.environ, {'TEST_API_KEY': 'test_key'}):
+            # Mock API error
+            mock_post.side_effect = Exception("API error")
+            
+            # Test
+            completions = self.provider.get_completions("def test():\n    pass\n", 10)
+            
+            # Verify
+            self.assertEqual(completions, [])
+            
+    @patch('requests.post')
+    def test_get_api_completions_no_key(self, mock_post):
+        """Test handling missing API key."""
+        # Set model type to api
+        self.provider.model_type = 'api'
+        self.provider.model_loaded = True
+        
+        # Test without environment variable
+        completions = self.provider.get_completions("def test():\n    pass\n", 10)
+        
+        # Verify
+        self.assertEqual(completions, [])
+        mock_post.assert_not_called()
+
+
+class TestSnippetCompletionProvider(unittest.TestCase):
+    """Tests for the SnippetCompletionProvider class."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        # Mock config with custom snippets
+        self.config = {
+            'ai': {
+                'snippets': {
+                    'python': [
+                        {
+                            'prefix': 'testfunc',
+                            'body': 'def test_function():\n    pass',
+                            'description': 'Test function'
+                        }
+                    ]
+                }
+            }
+        }
+        
+        # Create provider
+        self.provider = SnippetCompletionProvider(self.config)
+        
+    def test_init(self):
+        """Test initialization."""
+        self.assertEqual(self.provider.config, self.config)
+        self.assertIn('python', self.provider.snippets)
+        self.assertEqual(len(self.provider.snippets['python']), 1)
+        self.assertEqual(self.provider.snippets['python'][0]['prefix'], 'testfunc')
+        
+    def test_load_default_snippets(self):
+        """Test loading default snippets."""
+        # Create provider with empty config
+        provider = SnippetCompletionProvider({})
+        
+        # Verify default snippets were loaded
+        self.assertIn('python', provider.snippets)
+        self.assertIn('javascript', provider.snippets)
+        self.assertTrue(len(provider.snippets['python']) > 0)
+        self.assertTrue(len(provider.snippets['javascript']) > 0)
+        
+    def test_get_completions_matching(self):
+        """Test getting completions that match the current word."""
+        # Test with matching prefix
+        completions = self.provider.get_completions("def test():\n    test", 18, language='python')
+        
+        # Verify
+        self.assertEqual(len(completions), 1)
+        self.assertEqual(completions[0]['text'], 'testfunc')
+        self.assertEqual(completions[0]['type'], 'snippet')
+        self.assertEqual(completions[0]['provider'], 'snippet')
+        
+    def test_get_completions_no_match(self):
+        """Test getting completions with no matching prefix."""
+        # Test with non-matching prefix
+        completions = self.provider.get_completions("def test():\n    xyz", 18, language='python')
+        
+        # Verify
+        self.assertEqual(completions, [])
+        
+    def test_get_completions_language_detection(self):
+        """Test language detection from file path."""
+        # Test with Python file
+        completions = self.provider.get_completions("test", 4, file_path='test.py')
+        
+        # Verify
+        self.assertEqual(len(completions), 1)
+        self.assertEqual(completions[0]['text'], 'testfunc')
+        
+        # Test with JavaScript file
+        provider = SnippetCompletionProvider({})  # Use default snippets
+        completions = provider.get_completions("func", 4, file_path='test.js')
+        
+        # Verify
+        self.assertTrue(any(c['text'] == 'function' for c in completions))
 
 
 class TestCodeCompletionManager(unittest.TestCase):
@@ -199,16 +351,20 @@ class TestCodeCompletionManager(unittest.TestCase):
         # Patch provider classes
         self.jedi_patcher = patch('src.ai.code_completion.JediCompletionProvider')
         self.transformer_patcher = patch('src.ai.code_completion.TransformerCompletionProvider')
+        self.snippet_patcher = patch('src.ai.code_completion.SnippetCompletionProvider')
         
         self.mock_jedi = self.jedi_patcher.start()
         self.mock_transformer = self.transformer_patcher.start()
+        self.mock_snippet = self.snippet_patcher.start()
         
         # Mock provider instances
         self.mock_jedi_instance = MagicMock()
         self.mock_transformer_instance = MagicMock()
+        self.mock_snippet_instance = MagicMock()
         
         self.mock_jedi.return_value = self.mock_jedi_instance
         self.mock_transformer.return_value = self.mock_transformer_instance
+        self.mock_snippet.return_value = self.mock_snippet_instance
         
         # Create manager
         self.manager = CodeCompletionManager(self.config)
@@ -217,6 +373,7 @@ class TestCodeCompletionManager(unittest.TestCase):
         """Tear down test fixtures."""
         self.jedi_patcher.stop()
         self.transformer_patcher.stop()
+        self.snippet_patcher.stop()
         
     def test_init(self):
         """Test initialization."""
@@ -226,9 +383,10 @@ class TestCodeCompletionManager(unittest.TestCase):
         self.assertEqual(self.manager.max_suggestions, 5)
         
         # Check providers
-        self.assertEqual(len(self.manager.providers), 2)
+        self.assertEqual(len(self.manager.providers), 3)
         self.assertIs(self.manager.providers[0], self.mock_jedi_instance)
-        self.assertIs(self.manager.providers[1], self.mock_transformer_instance)
+        self.assertIs(self.manager.providers[1], self.mock_snippet_instance)
+        self.assertIs(self.manager.providers[2], self.mock_transformer_instance)
         
     def test_get_completions(self):
         """Test getting completions from all providers."""
@@ -236,6 +394,9 @@ class TestCodeCompletionManager(unittest.TestCase):
         self.mock_jedi_instance.get_completions.return_value = [
             {'text': 'jedi1', 'provider': 'jedi'},
             {'text': 'jedi2', 'provider': 'jedi'}
+        ]
+        self.mock_snippet_instance.get_completions.return_value = [
+            {'text': 'snippet1', 'provider': 'snippet'}
         ]
         self.mock_transformer_instance.get_completions.return_value = [
             {'text': 'transformer1', 'provider': 'transformer'},
@@ -250,9 +411,9 @@ class TestCodeCompletionManager(unittest.TestCase):
         self.assertEqual(len(completions), 5)
         self.assertEqual(completions[0]['text'], 'jedi1')
         self.assertEqual(completions[1]['text'], 'jedi2')
-        self.assertEqual(completions[2]['text'], 'transformer1')
-        self.assertEqual(completions[3]['text'], 'transformer2')
-        self.assertEqual(completions[4]['text'], 'transformer3')
+        self.assertEqual(completions[2]['text'], 'snippet1')
+        self.assertEqual(completions[3]['text'], 'transformer1')
+        self.assertEqual(completions[4]['text'], 'transformer2')
         
     def test_get_completions_disabled(self):
         """Test that no completions are returned when disabled."""

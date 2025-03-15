@@ -89,6 +89,15 @@ RebelDESK uses GitHub Actions for automated workflow management:
 - **Project Board Management**: Issues move through workflow stages automatically
 - **Issue Status Updates**: Scripts to synchronize project progress with GitHub issues
 
+#### GitHub CLI Integration
+
+The development environment has GitHub CLI installed and configured, allowing for direct interaction with GitHub from the command line. This enables:
+
+- Direct issue creation and management
+- Automated status updates
+- Project board synchronization
+- Pull request management
+
 #### GitHub Scripts
 
 The project includes several scripts to manage GitHub integration:

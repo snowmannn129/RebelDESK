@@ -58,8 +58,8 @@ ai:
   model:
     type: local  # local, api
     local_path: ""  # path to local model
-    api_endpoint: ""  # API endpoint for remote model
-    api_key_env: "REBELDESK_AI_API_KEY"  # environment variable for API key
+    api_endpoint: "http://127.0.0.1:1234/v1/completions"  # API endpoint for LMStudio with deepseek-r1-distill-llama-8b
+    api_key_env: ""  # environment variable for API key
 
 # File Types
 file_types:

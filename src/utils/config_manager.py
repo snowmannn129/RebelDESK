@@ -43,6 +43,10 @@ class ConfigManager:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     self.config = yaml.safe_load(f) or {}
                     logger.info(f"Loaded configuration from {self.config_path}")
+                    
+                    # Debug log for AI configuration
+                    if 'ai' in self.config and 'model' in self.config['ai']:
+                        logger.debug(f"AI model config: {self.config['ai']['model']}")
             else:
                 logger.warning(f"Configuration file {self.config_path} not found. Using default settings.")
                 self.config = {}
@@ -53,6 +57,13 @@ class ConfigManager:
                     user_config = yaml.safe_load(f) or {}
                     logger.info(f"Loaded user configuration from {self.USER_CONFIG_PATH}")
                     self._merge_configs(self.config, user_config)
+            
+            # Ensure API endpoint is properly set for local models
+            if (self.config.get('ai', {}).get('model', {}).get('type') == 'local' and
+                'api_endpoint' in self.config.get('ai', {}).get('model', {}) and
+                self.config['ai']['model']['api_endpoint']):
+                # Make sure the API endpoint is not overwritten
+                logger.debug(f"Using API endpoint for local model: {self.config['ai']['model']['api_endpoint']}")
             
             return self.config
             

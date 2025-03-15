@@ -10,6 +10,7 @@ import os
 import logging
 import threading
 import time
+import requests
 from typing import List, Dict, Any, Optional, Tuple, Callable
 from pathlib import Path
 
@@ -17,6 +18,8 @@ import jedi
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import numpy as np
+
+from src.ai.documentation_generator import DocumentationGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +128,7 @@ class TransformerCompletionProvider(CompletionProvider):
         self.model_loaded = False
         self.loading_lock = threading.Lock()
         self.loading_thread = None
+        self.model_type = self.config.get('ai', {}).get('model', {}).get('type', 'local')
         
         # Start loading the model in a background thread
         self._load_model_async()
@@ -147,9 +151,9 @@ class TransformerCompletionProvider(CompletionProvider):
                 
             try:
                 # Get model configuration
-                model_type = self.config.get('ai', {}).get('model', {}).get('type', 'local')
+                self.model_type = self.config.get('ai', {}).get('model', {}).get('type', 'local')
                 
-                if model_type == 'local':
+                if self.model_type == 'local':
                     # Load local model
                     model_path = self.config.get('ai', {}).get('model', {}).get('local_path', '')
                     
@@ -172,14 +176,15 @@ class TransformerCompletionProvider(CompletionProvider):
                         low_cpu_mem_usage=True
                     )
                     
-                elif model_type == 'api':
-                    # API-based model will be implemented in a future version
-                    logger.warning("API-based models not yet implemented")
-                    return
+                    self.model_loaded = True
+                    logger.info("Local model loaded successfully")
                     
-                self.model_loaded = True
-                logger.info("Model loaded successfully")
-                
+                elif self.model_type == 'api':
+                    # API-based model doesn't need to load anything locally
+                    # Just mark as loaded so we can use the API
+                    self.model_loaded = True
+                    logger.info("API-based model configured successfully")
+                    
             except Exception as e:
                 logger.error(f"Error loading model: {e}", exc_info=True)
                 
@@ -221,48 +226,382 @@ class TransformerCompletionProvider(CompletionProvider):
                 # Use only the last N lines for context
                 context = '\n'.join(lines[-context_lines:])
                 
-            # Tokenize input
-            inputs = self.tokenizer(context, return_tensors="pt").to(self.model.device)
-            
-            # Generate completions
-            max_new_tokens = 50
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    num_return_sequences=3,
-                    temperature=0.7,
-                    top_p=0.95,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
+            # Use appropriate method based on model type
+            if self.model_type == 'local':
+                return self._get_local_completions(context, language)
+            elif self.model_type == 'api':
+                return self._get_api_completions(context, language)
+            else:
+                logger.error(f"Unknown model type: {self.model_type}")
+                return []
                 
-            # Decode completions
-            completions = []
-            for output in outputs:
-                # Get only the newly generated tokens
-                generated_tokens = output[inputs['input_ids'].shape[1]:]
-                completion_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-                
-                # Split at first newline to get just the current line completion
-                if '\n' in completion_text:
-                    completion_text = completion_text.split('\n')[0]
-                    
-                # Add to results if not empty
-                if completion_text.strip():
-                    completions.append({
-                        'text': completion_text,
-                        'type': 'suggestion',
-                        'description': 'AI-generated code suggestion',
-                        'documentation': '',
-                        'provider': 'transformer'
-                    })
-                    
-            return completions
-            
         except Exception as e:
             logger.error(f"Error getting Transformer completions: {e}", exc_info=True)
             return []
+            
+    def _get_local_completions(self, context: str, language: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get completions using the local Transformer model.
+        
+        Args:
+            context (str): The code context.
+            language (str, optional): The programming language.
+            
+        Returns:
+            List[Dict[str, Any]]: A list of completion suggestions.
+        """
+        # Tokenize input
+        inputs = self.tokenizer(context, return_tensors="pt").to(self.model.device)
+        
+        # Generate completions
+        max_new_tokens = 50
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                num_return_sequences=3,
+                temperature=0.7,
+                top_p=0.95,
+                do_sample=True,
+                pad_token_id=self.tokenizer.eos_token_id
+            )
+            
+        # Decode completions
+        completions = []
+        for output in outputs:
+            # Get only the newly generated tokens
+            generated_tokens = output[inputs['input_ids'].shape[1]:]
+            completion_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            
+            # Split at first newline to get just the current line completion
+            if '\n' in completion_text:
+                completion_text = completion_text.split('\n')[0]
+                
+            # Add to results if not empty
+            if completion_text.strip():
+                completions.append({
+                    'text': completion_text,
+                    'type': 'suggestion',
+                    'description': 'AI-generated code suggestion',
+                    'documentation': '',
+                    'provider': 'transformer-local'
+                })
+                
+        return completions
+        
+    def _get_api_completions(self, context: str, language: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get completions using an API-based model.
+        
+        Args:
+            context (str): The code context.
+            language (str, optional): The programming language.
+            
+        Returns:
+            List[Dict[str, Any]]: A list of completion suggestions.
+        """
+        # Get API configuration
+        api_endpoint = self.config.get('ai', {}).get('model', {}).get('api_endpoint', '')
+        api_key_env = self.config.get('ai', {}).get('model', {}).get('api_key_env', 'REBELDESK_AI_API_KEY')
+        
+        # Check if API endpoint is configured
+        if not api_endpoint:
+            logger.error("API endpoint not configured")
+            return []
+            
+        # Get API key from environment variable
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            logger.error(f"API key environment variable {api_key_env} not set")
+            return []
+            
+        try:
+            # Prepare request payload
+            payload = {
+                'prompt': context,
+                'max_tokens': 50,
+                'temperature': 0.7,
+                'top_p': 0.95,
+                'n': 3,  # Number of completions to generate
+                'stop': ['\n'],  # Stop at newline
+                'language': language or 'python'
+            }
+            
+            # Set up headers
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {api_key}'
+            }
+            
+            # Make API request
+            response = requests.post(api_endpoint, json=payload, headers=headers, timeout=10)
+            
+            # Check if request was successful
+            if response.status_code != 200:
+                logger.error(f"API request failed with status code {response.status_code}: {response.text}")
+                return []
+                
+            # Parse response
+            response_data = response.json()
+            
+            # Extract completions from response
+            completions = []
+            
+            # Handle different API response formats
+            if 'choices' in response_data:
+                # OpenAI-like API format
+                for choice in response_data['choices']:
+                    text = choice.get('text', '')
+                    if text.strip():
+                        completions.append({
+                            'text': text,
+                            'type': 'suggestion',
+                            'description': 'API-generated code suggestion',
+                            'documentation': '',
+                            'provider': 'transformer-api'
+                        })
+            elif 'completions' in response_data:
+                # Generic API format
+                for completion in response_data['completions']:
+                    text = completion.get('text', '')
+                    if text.strip():
+                        completions.append({
+                            'text': text,
+                            'type': 'suggestion',
+                            'description': 'API-generated code suggestion',
+                            'documentation': '',
+                            'provider': 'transformer-api'
+                        })
+            else:
+                # Unknown format, try to extract text directly
+                text = response_data.get('text', '')
+                if text and isinstance(text, str) and text.strip():
+                    completions.append({
+                        'text': text,
+                        'type': 'suggestion',
+                        'description': 'API-generated code suggestion',
+                        'documentation': '',
+                        'provider': 'transformer-api'
+                    })
+                else:
+                    logger.error(f"Unknown API response format: {response_data}")
+                    
+            return completions
+            
+        except requests.RequestException as e:
+            logger.error(f"API request error: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Error processing API response: {e}")
+            return []
+
+
+class SnippetCompletionProvider(CompletionProvider):
+    """Code completion provider for code snippets."""
+    
+    def __init__(self, config: Dict[str, Any] = None):
+        """
+        Initialize the snippet completion provider.
+        
+        Args:
+            config (Dict[str, Any], optional): Configuration settings.
+        """
+        super().__init__(config)
+        self.snippets = {}
+        self._load_snippets()
+        
+    def _load_snippets(self):
+        """Load code snippets from configuration."""
+        # Get snippets from config
+        snippets_config = self.config.get('ai', {}).get('snippets', {})
+        
+        # Process snippets by language
+        for language, language_snippets in snippets_config.items():
+            if language not in self.snippets:
+                self.snippets[language] = []
+                
+            # Add each snippet
+            for snippet in language_snippets:
+                if 'prefix' in snippet and 'body' in snippet:
+                    self.snippets[language].append(snippet)
+                    
+        # Load default snippets if none in config
+        if not self.snippets:
+            self._load_default_snippets()
+            
+        logger.info(f"Loaded {sum(len(s) for s in self.snippets.values())} snippets for {len(self.snippets)} languages")
+        
+    def _load_default_snippets(self):
+        """Load default code snippets."""
+        # Python snippets
+        self.snippets['python'] = [
+            {
+                'prefix': 'def',
+                'body': 'def ${1:function_name}(${2:parameters}):\n    ${3:pass}',
+                'description': 'Function definition'
+            },
+            {
+                'prefix': 'class',
+                'body': 'class ${1:ClassName}:\n    def __init__(self, ${2:parameters}):\n        ${3:pass}',
+                'description': 'Class definition'
+            },
+            {
+                'prefix': 'if',
+                'body': 'if ${1:condition}:\n    ${2:pass}',
+                'description': 'If statement'
+            },
+            {
+                'prefix': 'for',
+                'body': 'for ${1:item} in ${2:iterable}:\n    ${3:pass}',
+                'description': 'For loop'
+            },
+            {
+                'prefix': 'while',
+                'body': 'while ${1:condition}:\n    ${2:pass}',
+                'description': 'While loop'
+            },
+            {
+                'prefix': 'try',
+                'body': 'try:\n    ${1:pass}\nexcept ${2:Exception} as ${3:e}:\n    ${4:pass}',
+                'description': 'Try/except block'
+            }
+        ]
+        
+        # JavaScript snippets
+        self.snippets['javascript'] = [
+            {
+                'prefix': 'function',
+                'body': 'function ${1:name}(${2:parameters}) {\n    ${3:// code}\n}',
+                'description': 'Function definition'
+            },
+            {
+                'prefix': 'arrow',
+                'body': 'const ${1:name} = (${2:parameters}) => {\n    ${3:// code}\n}',
+                'description': 'Arrow function'
+            },
+            {
+                'prefix': 'if',
+                'body': 'if (${1:condition}) {\n    ${2:// code}\n}',
+                'description': 'If statement'
+            },
+            {
+                'prefix': 'for',
+                'body': 'for (let ${1:i} = 0; ${1:i} < ${2:array}.length; ${1:i}++) {\n    ${3:// code}\n}',
+                'description': 'For loop'
+            },
+            {
+                'prefix': 'foreach',
+                'body': '${1:array}.forEach(${2:item} => {\n    ${3:// code}\n});',
+                'description': 'ForEach loop'
+            }
+        ]
+        
+    def get_completions(self, code: str, cursor_position: int, 
+                        file_path: Optional[str] = None, language: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get code snippet completions for the given code and cursor position.
+        
+        Args:
+            code (str): The code to get completions for.
+            cursor_position (int): The cursor position in the code.
+            file_path (str, optional): The path to the file being edited.
+            language (str, optional): The programming language.
+            
+        Returns:
+            List[Dict[str, Any]]: A list of completion suggestions.
+        """
+        if not language:
+            # Try to determine language from file extension
+            if file_path:
+                ext = os.path.splitext(file_path)[1].lower()
+                if ext == '.py':
+                    language = 'python'
+                elif ext in ['.js', '.jsx']:
+                    language = 'javascript'
+                elif ext in ['.html', '.htm']:
+                    language = 'html'
+                elif ext == '.css':
+                    language = 'css'
+                elif ext in ['.cpp', '.h', '.hpp']:
+                    language = 'cpp'
+                elif ext == '.java':
+                    language = 'java'
+            
+            # Default to Python if language can't be determined
+            if not language:
+                language = 'python'
+                
+        # Get the current line up to the cursor
+        lines = code[:cursor_position].split('\n')
+        current_line = lines[-1] if lines else ""
+        
+        # Get the word being typed
+        word = ""
+        for i in range(len(current_line) - 1, -1, -1):
+            if current_line[i].isalnum() or current_line[i] == '_':
+                word = current_line[i] + word
+            else:
+                break
+                
+        # No completions if no word is being typed
+        if not word:
+            return []
+            
+        # Get snippets for the language
+        language_snippets = self.snippets.get(language, [])
+        
+        # Find matching snippets
+        completions = []
+        for snippet in language_snippets:
+            prefix = snippet.get('prefix', '')
+            if prefix.startswith(word):
+                # Process snippet body
+                body = snippet.get('body', '')
+                
+                # Replace placeholders with default values
+                import re
+                body = re.sub(r'\$\{(\d+):([^}]*)\}', r'\2', body)
+                
+                completions.append({
+                    'text': prefix,
+                    'type': 'snippet',
+                    'description': snippet.get('description', 'Code snippet'),
+                    'documentation': body,
+                    'provider': 'snippet',
+                    'snippet': body
+                })
+                
+        return completions
+
+
+class DocumentationCompletionProvider(CompletionProvider):
+    """Code completion provider for documentation generation."""
+    
+    def __init__(self, config: Dict[str, Any] = None):
+        """
+        Initialize the documentation completion provider.
+        
+        Args:
+            config (Dict[str, Any], optional): Configuration settings.
+        """
+        super().__init__(config)
+        self.doc_generator = DocumentationGenerator(config)
+        
+    def get_completions(self, code: str, cursor_position: int, 
+                        file_path: Optional[str] = None, language: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Get documentation completions for the given code and cursor position.
+        
+        Args:
+            code (str): The code to get completions for.
+            cursor_position (int): The cursor position in the code.
+            file_path (str, optional): The path to the file being edited.
+            language (str, optional): The programming language.
+            
+        Returns:
+            List[Dict[str, Any]]: A list of documentation completion suggestions.
+        """
+        return self.doc_generator.get_documentation_completion(code, cursor_position, file_path, language)
 
 
 class CodeCompletionManager:
@@ -294,6 +633,12 @@ class CodeCompletionManager:
         """Initialize the completion providers."""
         # Add Jedi provider for Python
         self.providers.append(JediCompletionProvider(self.config))
+        
+        # Add Snippet provider
+        self.providers.append(SnippetCompletionProvider(self.config))
+        
+        # Add Documentation provider
+        self.providers.append(DocumentationCompletionProvider(self.config))
         
         # Add Transformer provider if AI is enabled
         if self.enabled:
