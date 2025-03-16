@@ -1,0 +1,64 @@
+name: Regression Test Automation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 1'  # Run weekly on Mondays at midnight
+
+jobs:
+  regression-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for comparing with previous runs
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-html pytest-cov
+          sudo apt-get install -y xvfb
+
+      - name: Run Regression Tests
+        run: |
+          mkdir -p regression_reports
+          python src/tests/test_regression_automation.py --output-dir regression_reports
+
+      - name: Upload Regression Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: regression-reports
+          path: regression_reports/
+
+      - name: Check for Regressions
+        run: |
+          if [ -f regression_reports/regression_report.md ]; then
+            if grep -q "Total regressions: 0" regression_reports/regression_report.md; then
+              echo "No regressions detected."
+            else
+              echo "Regressions detected! See the regression report for details."
+              cat regression_reports/regression_report.md
+              exit 1
+            fi
+          else
+            echo "No regression report found."
+          fi
+
+      - name: Deploy Regression Reports to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./regression_reports
+          destination_dir: regression-reports
+          keep_files: true

@@ -352,19 +352,23 @@ class TestCodeCompletionManager(unittest.TestCase):
         self.jedi_patcher = patch('src.ai.code_completion.JediCompletionProvider')
         self.transformer_patcher = patch('src.ai.code_completion.TransformerCompletionProvider')
         self.snippet_patcher = patch('src.ai.code_completion.SnippetCompletionProvider')
+        self.doc_patcher = patch('src.ai.code_completion.DocumentationCompletionProvider')
         
         self.mock_jedi = self.jedi_patcher.start()
         self.mock_transformer = self.transformer_patcher.start()
         self.mock_snippet = self.snippet_patcher.start()
+        self.mock_doc = self.doc_patcher.start()
         
         # Mock provider instances
         self.mock_jedi_instance = MagicMock()
         self.mock_transformer_instance = MagicMock()
         self.mock_snippet_instance = MagicMock()
+        self.mock_doc_instance = MagicMock()
         
         self.mock_jedi.return_value = self.mock_jedi_instance
         self.mock_transformer.return_value = self.mock_transformer_instance
         self.mock_snippet.return_value = self.mock_snippet_instance
+        self.mock_doc.return_value = self.mock_doc_instance
         
         # Create manager
         self.manager = CodeCompletionManager(self.config)
@@ -374,19 +378,21 @@ class TestCodeCompletionManager(unittest.TestCase):
         self.jedi_patcher.stop()
         self.transformer_patcher.stop()
         self.snippet_patcher.stop()
+        self.doc_patcher.stop()
         
     def test_init(self):
         """Test initialization."""
         self.assertEqual(self.manager.config, self.config)
         self.assertTrue(self.manager.enabled)
-        self.assertEqual(self.manager.suggestion_delay, 0.3)
+        self.assertEqual(self.manager.suggestion_delay, 300)
         self.assertEqual(self.manager.max_suggestions, 5)
         
         # Check providers
-        self.assertEqual(len(self.manager.providers), 3)
+        self.assertEqual(len(self.manager.providers), 4)
         self.assertIs(self.manager.providers[0], self.mock_jedi_instance)
         self.assertIs(self.manager.providers[1], self.mock_snippet_instance)
-        self.assertIs(self.manager.providers[2], self.mock_transformer_instance)
+        self.assertIs(self.manager.providers[2], self.mock_doc_instance)
+        self.assertIs(self.manager.providers[3], self.mock_transformer_instance)
         
     def test_get_completions(self):
         """Test getting completions from all providers."""
@@ -398,6 +404,7 @@ class TestCodeCompletionManager(unittest.TestCase):
         self.mock_snippet_instance.get_completions.return_value = [
             {'text': 'snippet1', 'provider': 'snippet'}
         ]
+        self.mock_doc_instance.get_completions.return_value = []
         self.mock_transformer_instance.get_completions.return_value = [
             {'text': 'transformer1', 'provider': 'transformer'},
             {'text': 'transformer2', 'provider': 'transformer'},

@@ -1,0 +1,121 @@
+name: UI Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      test_pattern:
+        description: 'Pattern to match test files'
+        required: false
+        default: 'test_ui_*.py'
+      parallel:
+        description: 'Run tests in parallel'
+        required: false
+        default: 'true'
+      max_workers:
+        description: 'Maximum number of worker processes'
+        required: false
+        default: '4'
+
+jobs:
+  ui-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        # Install additional dependencies for UI testing
+        pip install pytest pytest-qt pytest-xvfb pillow
+    
+    - name: Set up virtual display
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0
+        export DISPLAY=:99.0
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        sleep 3  # give xvfb some time to start
+    
+    - name: Run UI tests
+      run: |
+        export DISPLAY=:99.0
+        export QT_QPA_PLATFORM=offscreen
+        
+        # Create directories for test results
+        mkdir -p src/tests/ui_test_results
+        mkdir -p src/tests/failure_screenshots
+        
+        # Run the tests
+        python src/tests/run_ui_tests.py --pattern ${{ github.event.inputs.test_pattern || 'test_ui_*.py' }} --parallel ${{ github.event.inputs.parallel || 'true' }} --max-workers ${{ github.event.inputs.max_workers || '4' }}
+      continue-on-error: true  # Continue even if tests fail
+    
+    - name: Generate summary report
+      run: |
+        export DISPLAY=:99.0
+        export QT_QPA_PLATFORM=offscreen
+        
+        # Generate a summary report
+        python src/tests/run_ui_tests.py --summary
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: ui-test-results
+        path: |
+          src/tests/ui_test_results/
+          src/tests/failure_screenshots/
+    
+    - name: Find latest summary report
+      id: find_summary
+      run: |
+        SUMMARY_REPORT=$(ls -t src/tests/ui_test_results/ui_test_summary_*.html | head -n 1)
+        echo "summary_report=$SUMMARY_REPORT" >> $GITHUB_OUTPUT
+    
+    - name: Post summary comment on PR
+      if: github.event_name == 'pull_request' && steps.find_summary.outputs.summary_report != ''
+      uses: actions/github-script@v6
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Read the summary report
+          const summaryReport = '${{ steps.find_summary.outputs.summary_report }}';
+          const reportContent = fs.readFileSync(summaryReport, 'utf8');
+          
+          // Extract basic statistics from the report
+          const totalTestsMatch = reportContent.match(/Total test runs: (\d+)/);
+          const totalTests = totalTestsMatch ? totalTestsMatch[1] : 'unknown';
+          
+          // Create a comment with a link to the artifacts
+          const artifactUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          
+          const comment = `## UI Test Results
+          
+          UI tests have been run for this PR.
+          
+          - Total test runs: ${totalTests}
+          - [View detailed results](${artifactUrl})
+          
+          Please check the artifacts for detailed test reports and screenshots of any failures.
+          `;
+          
+          // Post the comment
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
